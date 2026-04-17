@@ -1,4 +1,4 @@
-# MacroLog — Setup Guide
+# Macrogram — Setup Guide
 ## ~10 minutes total ⏱️
 
 ---
@@ -6,7 +6,7 @@
 ## STEP 1 — Create a Firebase Project (Free)
 
 1. Go to **https://console.firebase.google.com**
-2. Click **"Add project"** → name it `macrolog` → disable Google Analytics → **Create project**
+2. Click **"Add project"** → name it `macrogram` → disable Google Analytics → **Create project**
 
 ---
 
@@ -44,7 +44,7 @@ service cloud.firestore {
 
 1. Click ⚙️ gear → **Project settings**
 2. Scroll to **"Your apps"** → click **</>** (web icon)
-3. Name it `macrolog-web` → **Register app**
+3. Name it `macrogram-web` → **Register app**
 4. Copy the `firebaseConfig` object — you need these 6 values:
    - `apiKey`
    - `authDomain`
@@ -76,13 +76,13 @@ Open Terminal (Mac) or Command Prompt (Windows):
 
 ```bash
 npm install -g firebase-tools
-cd path/to/macrolog-folder
+cd path/to/macrogram-folder
 firebase login
 firebase init hosting
 ```
 
 When prompted:
-- **Use an existing project** → select your `macrolog` project
+- **Use an existing project** → select your `macrogram` project
 - **Public directory** → type `.` (just a dot — current folder)
 - **Single-page app** → **Yes**
 - **Overwrite index.html?** → **No** ← important!
@@ -92,7 +92,7 @@ Then deploy:
 firebase deploy
 ```
 
-You'll get a URL like `https://macrolog-xxxxx.web.app` — **that's your app!**
+You'll get a URL like `https://macrogram-xxxxx.web.app` — **that's your app!**
 
 ---
 

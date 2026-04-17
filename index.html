@@ -319,7 +319,6 @@ canvas.sparkline{width:100%;height:60px;}
     <button class="top-nav-btn active" onclick="showPage('macros',this)"><span class="nav-icon">🍽</span>Macros</button>
     <button class="top-nav-btn" onclick="showPage('body',this)"><span class="nav-icon">📏</span>Body</button>
     <button class="top-nav-btn" onclick="showPage('recipes',this)"><span class="nav-icon">📖</span>Recipes</button>
-    <button class="top-nav-btn" onclick="showPage('profile',this)"><span class="nav-icon">👤</span>Profile</button>
   </nav>
 
   <!-- ══ MACROS ══ -->
@@ -449,46 +448,6 @@ canvas.sparkline{width:100%;height:60px;}
     <div id="recipeList"></div>
   </div>
 
-  <!-- ══ PROFILE ══ -->
-  <div class="page" id="page-profile">
-
-    <!-- User card -->
-    <div class="card" style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
-      <div id="profileAvatarLg" style="width:56px;height:56px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;color:#0e0f11;flex-shrink:0;overflow:hidden;"></div>
-      <div>
-        <div id="profileNameLg" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;"></div>
-        <div id="profileEmailLg" style="font-size:0.68rem;color:var(--muted);margin-top:2px;"></div>
-      </div>
-    </div>
-
-    <!-- Actions -->
-    <div class="profile-section-label">Tools</div>
-    <div class="profile-action" onclick="openModal('calcModal')">
-      <span class="profile-action-icon">🧮</span>
-      <div class="profile-action-text">
-        <div class="profile-action-title">Macro Calculator</div>
-        <div class="profile-action-sub">Calculate personalised daily targets</div>
-      </div>
-      <span class="profile-action-arrow">›</span>
-    </div>
-    <div class="profile-action" onclick="openModal('settingsModal')">
-      <span class="profile-action-icon">⚙️</span>
-      <div class="profile-action-text">
-        <div class="profile-action-title">Daily Targets</div>
-        <div class="profile-action-sub">Set weekly macro goals by day</div>
-      </div>
-      <span class="profile-action-arrow">›</span>
-    </div>
-
-    <div class="profile-section-label" style="margin-top:8px;">Account</div>
-    <div class="profile-action profile-action-danger" onclick="doSignOut()">
-      <span class="profile-action-icon">↩</span>
-      <div class="profile-action-text">
-        <div class="profile-action-title" style="color:var(--danger)">Sign Out</div>
-      </div>
-    </div>
-
-  </div>
 
 </div><!-- /screen-app -->
 
@@ -690,6 +649,49 @@ canvas.sparkline{width:100%;height:60px;}
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModals()">Close</button>
       <button class="btn btn-accent" onclick="runBeforeAfter()">Compare</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Account ═══ -->
+<div class="modal-bg" id="accountModal">
+  <div class="modal" style="max-width:400px;">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px;">
+      <div id="profileAvatarLg" style="width:52px;height:52px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:1.2rem;color:#0e0f11;flex-shrink:0;overflow:hidden;"></div>
+      <div>
+        <div id="profileNameLg" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;"></div>
+        <div id="profileEmailLg" style="font-size:0.68rem;color:var(--muted);margin-top:2px;"></div>
+      </div>
+    </div>
+
+    <div class="profile-section-label">Tools</div>
+    <div class="profile-action" onclick="closeModals();openModal('calcModal')">
+      <span class="profile-action-icon">🧮</span>
+      <div class="profile-action-text">
+        <div class="profile-action-title">Macro Calculator</div>
+        <div class="profile-action-sub">Calculate personalised daily targets</div>
+      </div>
+      <span class="profile-action-arrow">›</span>
+    </div>
+    <div class="profile-action" onclick="closeModals();openModal('settingsModal')">
+      <span class="profile-action-icon">⚙️</span>
+      <div class="profile-action-text">
+        <div class="profile-action-title">Daily Targets</div>
+        <div class="profile-action-sub">Set weekly macro goals by day</div>
+      </div>
+      <span class="profile-action-arrow">›</span>
+    </div>
+
+    <div class="profile-section-label" style="margin-top:10px;">Account</div>
+    <div class="profile-action profile-action-danger" onclick="doSignOut()">
+      <span class="profile-action-icon">↩</span>
+      <div class="profile-action-text">
+        <div class="profile-action-title" style="color:var(--danger)">Sign Out</div>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-outline" style="flex:1" onclick="closeModals()">Close</button>
     </div>
   </div>
 </div>
@@ -993,32 +995,19 @@ function showPage(id,btn){
   if(btn) btn.classList.add('active');
   if(id==='body')    renderBodyPage();
   if(id==='recipes') renderRecipes();
-  if(id==='profile') renderProfilePage();
 }
 
 function goToProfile(){
-  const btn=document.querySelector('.top-nav-btn[onclick*="profile"]');
-  showPage('profile', btn);
-}
-
-function renderProfilePage(){
   if(!currentUser) return;
-  const name = userProfile.name || currentUser.displayName || currentUser.email?.split('@')[0] || 'User';
+  const name  = userProfile.name || currentUser.displayName || currentUser.email?.split('@')[0] || 'User';
   const email = currentUser.email || '';
   const photo = currentUser.photoURL || userProfile.photoURL;
-
-  // Large avatar
-  const lg = document.getElementById('profileAvatarLg');
-  if(photo){ lg.style.cssText+=`;background-image:url(${photo});background-size:cover;background-color:transparent;`; lg.textContent=''; }
-  else { lg.textContent=name[0].toUpperCase(); }
-
-  // Also keep header avatar in sync
+  const lg  = document.getElementById('profileAvatarLg');
   const hdr = document.getElementById('headerAvatar');
-  if(photo){ hdr.style.cssText+=`;background-image:url(${photo});background-size:cover;background-color:transparent;`; hdr.textContent=''; }
-  else { hdr.textContent=name[0].toUpperCase(); }
-
-  document.getElementById('profileNameLg').textContent = name;
+  [lg, hdr].forEach(el=>{ if(!el) return; if(photo){ el.style.cssText+=`;background-image:url(${photo});background-size:cover;background-color:transparent;`; el.textContent=''; } else { el.textContent=name[0].toUpperCase(); } });
+  document.getElementById('profileNameLg').textContent  = name;
   document.getElementById('profileEmailLg').textContent = email;
+  openModal('accountModal');
 }
 
 // ════════════════════════════════════════════════════

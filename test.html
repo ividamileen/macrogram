@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Macrogram — Test Suite</title>
+<style>
+  :root{--bg:#0e0f11;--card:#1e2128;--border:#2a2d35;--text:#f0f0ee;--muted:#6b7280;
+    --pass:#4ade80;--fail:#e05c5c;--accent:#c8f05a;--warn:#f5a623;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-size:13px;padding:24px;}
+  h1{font-size:1.3rem;color:var(--accent);margin-bottom:4px;}
+  .sub{color:var(--muted);font-size:0.75rem;margin-bottom:24px;}
+  #summary{display:flex;gap:16px;margin-bottom:24px;padding:14px 18px;background:var(--card);border-radius:10px;border:1px solid var(--border);}
+  .sum-item{display:flex;flex-direction:column;align-items:center;gap:2px;}
+  .sum-num{font-size:1.6rem;font-weight:800;}
+  .sum-lbl{font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+  .suite{margin-bottom:20px;}
+  .suite-name{font-size:0.7rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);
+    margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+  .test{display:flex;align-items:flex-start;gap:10px;padding:7px 10px;border-radius:6px;margin-bottom:3px;}
+  .test.pass{background:rgba(74,222,128,0.06);}
+  .test.fail{background:rgba(224,92,92,0.08);}
+  .badge{width:16px;height:16px;border-radius:50%;flex-shrink:0;margin-top:1px;font-size:9px;
+    display:flex;align-items:center;justify-content:center;font-weight:700;}
+  .badge.pass{background:var(--pass);color:#000;}
+  .badge.fail{background:var(--fail);color:#fff;}
+  .test-name{flex:1;}
+  .err{color:var(--fail);font-size:0.72rem;margin-top:3px;}
+  #spinner{color:var(--muted);padding:40px;text-align:center;}
+</style>
+</head>
+<body>
+<h1>Macrogram — Test Suite</h1>
+<p class="sub">Open in any browser. No server needed. Tests run automatically.</p>
+<div id="summary"><div id="spinner">Running tests…</div></div>
+<div id="results"></div>
+
+<!-- ── Minimal DOM stubs (hidden) needed by DOM-integration tests ── -->
+<div id="stubs" style="display:none">
+  <!-- Calculator inputs -->
+  <input id="calcWeight"><input id="calcAge"><input id="calcFt"><input id="calcIn">
+  <select id="calcGender"><option value="male">Male</option><option value="female">Female</option></select>
+  <select id="calcActivity"><option value="1.55" selected>Moderate</option></select>
+  <select id="calcGoalAdj"><option value="-250" selected>-250</option></select>
+  <select id="calcProteinRatio"><option value="1.0" selected>1.0</option></select>
+  <div id="calcError" style="display:none"></div>
+  <div id="calcResults" style="display:none"></div>
+  <div id="calcSteps"></div><div id="calcMacroGrid"></div><div id="calcApplyGrid"></div>
+  <!-- Meal form -->
+  <input id="mealName"><input id="mCarb"><input id="mFat"><input id="mProtein">
+  <div id="mealList"></div><span id="mealCount"></span>
+  <!-- Hero -->
+  <div id="heroRemaining"></div><div id="heroRemLabel"></div>
+  <div id="heroEaten"></div><div id="heroGoal"></div>
+  <div id="remainingBars"></div>
+  <!-- Today header -->
+  <div id="todayGreeting"></div><div id="todayDateStr"></div>
+  <button id="backToTodayBtn" style="display:none"></button>
+  <button id="calToggleBtn">📅 History</button>
+  <div id="logCard"></div>
+  <!-- Calendar -->
+  <div id="calendarWrap" style="display:none"></div>
+  <div id="calGrid"></div><div id="calMonthLabel"></div>
+  <!-- Auth -->
+  <button id="auth-btn"></button>
+  <div id="auth-error" style="display:none"></div>
+  <div id="screen-auth" style="display:none"></div>
+  <div id="screen-app"></div>
+  <!-- Weight / profile stubs -->
+  <input id="wDate"><input id="wWeight"><input id="wNotes">
+  <div id="headerAvatar"></div><span id="headerUser"></span>
+  <div id="dateBadge"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  MICRO TEST RUNNER
+// ══════════════════════════════════════════════════
+const suites=[];
+let _cur=null;
+function suite(name,fn){ _cur={name,tests:[]}; suites.push(_cur); fn(); _cur=null; }
+function it(name,fn){ _cur.tests.push({name,fn}); }
+function assert(cond,msg){ if(!cond) throw new Error(msg||'Expected truthy'); }
+function eq(a,b,msg){ if(a!==b) throw new Error(msg||`Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); }
+function approx(a,b,tol=1){ if(Math.abs(a-b)>tol) throw new Error(`Expected ~${b} (±${tol}), got ${a}`); }
+function contains(str,sub){ if(!(str||'').includes(sub)) throw new Error(`Expected "${sub}" in output`); }
+function notContains(str,sub){ if((str||'').includes(sub)) throw new Error(`Did not expect "${sub}" in output`); }
+
+// ══════════════════════════════════════════════════
+//  APP CONSTANTS + STATE (mirrors index.html)
+// ══════════════════════════════════════════════════
+const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const TODAY_DATE=new Date().toISOString().slice(0,10);
+let targets={Mon:{carb:200,fat:80,protein:160},Tue:{carb:200,fat:80,protein:160},
+  Wed:{carb:200,fat:80,protein:160},Thu:{carb:200,fat:80,protein:160},
+  Fri:{carb:200,fat:80,protein:160},Sat:{carb:200,fat:80,protein:160},Sun:{carb:200,fat:80,protein:160}};
+let mealCache={};
+let dayTotals={};
+let activeDate=TODAY_DATE;
+let calYear=new Date().getFullYear();
+let calMonth=new Date().getMonth();
+let _calcResult=null;
+let _calcDaySel=new Set(DAYS);
+let currentUser={uid:'test',email:'test@example.com',displayName:'Test User',photoURL:null};
+
+// ══════════════════════════════════════════════════
+//  PURE FUNCTIONS (exact copies from index.html)
+// ══════════════════════════════════════════════════
+function dateToDay(ds){ return DAYS[[6,0,1,2,3,4,5][new Date(ds+'T12:00:00').getDay()]]; }
+function calcTotals(meals){ return meals.reduce((a,m)=>({carb:a.carb+(+m.carb||0),fat:a.fat+(+m.fat||0),protein:a.protein+(+m.protein||0)}),{carb:0,fat:0,protein:0}); }
+function calcCals(t){ return Math.round(t.carb*4+t.fat*9+t.protein*4); }
+function getGreeting(){ const h=new Date().getHours(); return h<12?'Good morning':h<17?'Good afternoon':'Good evening'; }
+function activeMeals(){ return mealCache[activeDate]||[]; }
+
+function friendlyErr(c){ return ({
+  'auth/user-not-found':'No account with that email.',
+  'auth/wrong-password':'Incorrect password.',
+  'auth/email-already-in-use':'An account with this email already exists.',
+  'auth/weak-password':'Password must be at least 6 characters.',
+  'auth/invalid-email':'Please enter a valid email address.',
+  'auth/invalid-credential':'Incorrect email or password.',
+  'auth/popup-blocked':'Popup was blocked. Please allow popups for this site and try again.',
+  'auth/operation-not-allowed':'Google sign-in is not enabled. See SETUP.md step 2.',
+})[c]||'Something went wrong. Please try again.'; }
+
+function renderBars(tot,tgt){
+  return [{key:'carb',label:'Carbs',color:'var(--carb)'},{key:'fat',label:'Fat',color:'var(--fat)'},{key:'protein',label:'Protein',color:'var(--protein)'}]
+  .map(m=>{
+    const e=tot[m.key],g=tgt[m.key]||0,over=e>g&&g>0,pct=g?Math.min((e/g)*100,100):0;
+    const valStr=g>0?`${e.toFixed(0)}<span style="opacity:0.45">/${g}g</span>`:`${e.toFixed(0)}g`;
+    return `<div class="rem-row"><div class="rem-label" style="color:${m.color}">${m.label}</div>
+      <div class="rem-bar-bg"><div class="rem-bar-fill" style="width:${pct}%;background:${over?'var(--danger)':m.color}"></div></div>
+      <div class="rem-val" style="color:${over?'var(--danger)':'var(--muted)'}">${valStr}</div></div>`;
+  }).join('');
+}
+
+function calRingHtml(ds){
+  const tot=mealCache[ds]?calcTotals(mealCache[ds]):dayTotals[ds];
+  if(!tot) return '';
+  const cCals=(tot.carb||0)*4,fCals=(tot.fat||0)*9,pCals=(tot.protein||0)*4;
+  const total=cCals+fCals+pCals;
+  if(!total) return '';
+  const cx=18,cy=18,r=13;
+  const slices=[
+    {pct:cCals/total,fill:'rgba(245,166,35,0.82)'},
+    {pct:fCals/total,fill:'rgba(224,92,92,0.82)'},
+    {pct:pCals/total,fill:'rgba(78,205,196,0.82)'},
+  ].filter(s=>s.pct>0.005);
+  let angle=-Math.PI/2;
+  const paths=slices.map(s=>{
+    const a0=angle,a1=angle+s.pct*2*Math.PI; angle=a1;
+    if(s.pct>=0.999) return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${s.fill}"/>`;
+    const x0=+(cx+r*Math.cos(a0)).toFixed(2),y0=+(cy+r*Math.sin(a0)).toFixed(2);
+    const x1=+(cx+r*Math.cos(a1)).toFixed(2),y1=+(cy+r*Math.sin(a1)).toFixed(2);
+    return `<path d="M${cx},${cy}L${x0},${y0}A${r},${r} 0 ${s.pct>0.5?1:0},1 ${x1},${y1}Z" fill="${s.fill}"/>`;
+  }).join('');
+  return `<svg class="cal-ring" viewBox="0 0 36 36"><circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--surface)"/>${paths}</svg>`;
+}
+
+// Calculator math (extracted from runCalculator in index.html)
+function computeMacros(weightLbs,ft,inch,age,gender,activity,goalAdj,proteinRatio){
+  const wKg=weightLbs*0.453592,hCm=(ft*12+inch)*2.54;
+  const bmr=gender==='male'?Math.round(10*wKg+6.25*hCm-5*age+5):Math.round(10*wKg+6.25*hCm-5*age-161);
+  const tdee=Math.round(bmr*activity);
+  const targetCals=Math.max(1200,Math.round(tdee+goalAdj));
+  const protein=Math.round(weightLbs*proteinRatio);
+  const fat=Math.max(30,Math.round((targetCals*0.28)/9));
+  const carb=Math.max(20,Math.round((targetCals-protein*4-fat*9)/4));
+  return {bmr,tdee,targetCals,protein,fat,carb};
+}
+
+// DOM-dependent functions (mirrors from index.html)
+function toggleCalendar(){
+  const wrap=document.getElementById('calendarWrap');
+  const btn=document.getElementById('calToggleBtn');
+  const open=wrap.style.display!=='none';
+  wrap.style.display=open?'none':'block';
+  btn.textContent=open?'📅 History':'✕ Close';
+}
+
+function goBackToToday(){
+  activeDate=TODAY_DATE;
+  document.getElementById('calendarWrap').style.display='none';
+  document.getElementById('calToggleBtn').textContent='📅 History';
+}
+
+function showAuth(){
+  const btn=document.getElementById('auth-btn');
+  if(btn){ btn.disabled=false; btn.style.opacity='1'; }
+  document.getElementById('auth-error').style.display='none';
+  document.getElementById('screen-auth').style.display='flex';
+  document.getElementById('screen-app').classList.remove('visible');
+}
+
+function renderAll(){
+  const todayStr=new Date().toISOString().slice(0,10);
+  const isToday=activeDate===todayStr,isPast=activeDate<todayStr;
+  document.getElementById('todayGreeting').textContent=isToday?getGreeting():'Viewing';
+  const selDate=new Date(activeDate+'T12:00:00');
+  document.getElementById('todayDateStr').textContent=isToday
+    ?selDate.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})
+    :selDate.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  document.getElementById('backToTodayBtn').style.display=isToday?'none':'';
+  document.getElementById('logCard').style.display=isPast?'none':'';
+  const dayName=dateToDay(activeDate);
+  const tgt=targets[dayName]||{carb:0,fat:0,protein:0};
+  const meals=activeMeals();
+  const tot=calcTotals(meals),cals=calcCals(tot),tCals=calcCals(tgt);
+  const over=tCals>0&&cals>tCals,remaining=Math.max(tCals-cals,0);
+  const remEl=document.getElementById('heroRemaining');
+  remEl.textContent=tCals>0?(over?'+'+(cals-tCals).toLocaleString():remaining.toLocaleString()):cals.toLocaleString();
+  remEl.className='hero-remaining-num'+(over?' over':'');
+  document.getElementById('heroRemLabel').textContent=tCals>0?(over?'kcal over':'kcal remaining'):'kcal eaten today';
+  document.getElementById('heroEaten').textContent=cals.toLocaleString();
+  document.getElementById('heroGoal').textContent=tCals>0?tCals.toLocaleString():'—';
+  document.getElementById('remainingBars').innerHTML=renderBars(tot,tgt);
+}
+
+function runCalculator(){
+  const w=parseFloat(document.getElementById('calcWeight').value);
+  const age=parseFloat(document.getElementById('calcAge').value);
+  const ft=parseFloat(document.getElementById('calcFt').value)||0;
+  const inch=parseFloat(document.getElementById('calcIn').value)||0;
+  const missing=[];
+  if(!w) missing.push('calcWeight');
+  if(!age) missing.push('calcAge');
+  if(ft===0&&inch===0){missing.push('calcFt');missing.push('calcIn');}
+  if(missing.length){
+    ['calcWeight','calcAge','calcFt','calcIn'].forEach(id=>document.getElementById(id).style.borderColor='');
+    missing.forEach(id=>document.getElementById(id).style.borderColor='var(--danger)');
+    document.getElementById('calcError').style.display='block';
+    return;
+  }
+  document.getElementById('calcError').style.display='none';
+  ['calcWeight','calcAge','calcFt','calcIn'].forEach(id=>document.getElementById(id).style.borderColor='');
+  const gender=document.getElementById('calcGender').value;
+  const activity=parseFloat(document.getElementById('calcActivity').value);
+  const goalAdj=parseInt(document.getElementById('calcGoalAdj').value);
+  const proteinRatio=parseFloat(document.getElementById('calcProteinRatio').value);
+  const r=computeMacros(w,ft,inch,age,gender,activity,goalAdj,proteinRatio);
+  _calcResult=r;
+  document.getElementById('calcResults').style.display='block';
+}
+
+function addMeal(){
+  const name=document.getElementById('mealName').value.trim();
+  if(!name){ document.getElementById('mealName').focus(); return false; }
+  const meal={
+    name,
+    carb:parseFloat(document.getElementById('mCarb').value)||0,
+    fat:parseFloat(document.getElementById('mFat').value)||0,
+    protein:parseFloat(document.getElementById('mProtein').value)||0,
+    date:activeDate
+  };
+  if(!mealCache[activeDate]) mealCache[activeDate]=[];
+  mealCache[activeDate].push({id:'test_'+Date.now(),...meal});
+  ['mealName','mCarb','mFat','mProtein'].forEach(id=>document.getElementById(id).value='');
+  return true;
+}
+
+// ══════════════════════════════════════════════════
+//  TEST SUITES
+// ══════════════════════════════════════════════════
+
+suite('dateToDay — converts YYYY-MM-DD to day name', ()=>{
+  it('Monday 2026-04-13', ()=>eq(dateToDay('2026-04-13'),'Mon'));
+  it('Tuesday 2026-04-14',()=>eq(dateToDay('2026-04-14'),'Tue'));
+  it('Wednesday 2026-04-15',()=>eq(dateToDay('2026-04-15'),'Wed'));
+  it('Thursday 2026-04-16',()=>eq(dateToDay('2026-04-16'),'Thu'));
+  it('Friday 2026-04-17',  ()=>eq(dateToDay('2026-04-17'),'Fri'));
+  it('Saturday 2026-04-18',()=>eq(dateToDay('2026-04-18'),'Sat'));
+  it('Sunday 2026-04-19',  ()=>eq(dateToDay('2026-04-19'),'Sun'));
+  it('Year boundary 2025-12-31',()=>eq(dateToDay('2025-12-31'),'Wed'));
+});
+
+suite('calcTotals — sums macros across meals', ()=>{
+  it('empty array returns zeros', ()=>{
+    const t=calcTotals([]);
+    eq(t.carb,0); eq(t.fat,0); eq(t.protein,0);
+  });
+  it('single meal returns its values', ()=>{
+    const t=calcTotals([{carb:50,fat:20,protein:30}]);
+    eq(t.carb,50); eq(t.fat,20); eq(t.protein,30);
+  });
+  it('multiple meals sum correctly', ()=>{
+    const t=calcTotals([{carb:50,fat:20,protein:30},{carb:10,fat:5,protein:15}]);
+    eq(t.carb,60); eq(t.fat,25); eq(t.protein,45);
+  });
+  it('missing macro fields treated as 0', ()=>{
+    const t=calcTotals([{carb:30},{fat:10},{protein:20}]);
+    eq(t.carb,30); eq(t.fat,10); eq(t.protein,20);
+  });
+  it('string numbers coerced correctly', ()=>{
+    const t=calcTotals([{carb:'25',fat:'12.5',protein:'40'}]);
+    eq(t.carb,25); eq(t.fat,12.5); eq(t.protein,40);
+  });
+  it('null / undefined macros treated as 0', ()=>{
+    const t=calcTotals([{carb:null,fat:undefined,protein:0}]);
+    eq(t.carb,0); eq(t.fat,0); eq(t.protein,0);
+  });
+});
+
+suite('calcCals — calories from macros', ()=>{
+  it('all zeros → 0', ()=>eq(calcCals({carb:0,fat:0,protein:0}),0));
+  it('carbs only: 100g → 400 kcal', ()=>eq(calcCals({carb:100,fat:0,protein:0}),400));
+  it('fat only: 100g → 900 kcal',   ()=>eq(calcCals({carb:0,fat:100,protein:0}),900));
+  it('protein only: 100g → 400 kcal',()=>eq(calcCals({carb:0,fat:0,protein:100}),400));
+  it('mixed: 50C 20F 30P → 490 kcal',()=>eq(calcCals({carb:50,fat:20,protein:30}),50*4+20*9+30*4));
+  it('rounds to integer', ()=>eq(typeof calcCals({carb:33,fat:11,protein:22}),'number'));
+  it('typical day 200C 80F 160P = 2120 kcal',()=>eq(calcCals({carb:200,fat:80,protein:160}),200*4+80*9+160*4));
+});
+
+suite('getGreeting — time-of-day greeting', ()=>{
+  it('returns a non-empty string', ()=>assert(getGreeting().length>0));
+  it('is one of the three expected values', ()=>{
+    assert(['Good morning','Good afternoon','Good evening'].includes(getGreeting()));
+  });
+  it('hours 0-11 → Good morning (if run in AM)', ()=>{
+    const h=new Date().getHours();
+    if(h<12) eq(getGreeting(),'Good morning');
+    else if(h<17) eq(getGreeting(),'Good afternoon');
+    else eq(getGreeting(),'Good evening');
+  });
+});
+
+suite('friendlyErr — maps Firebase error codes', ()=>{
+  it('user-not-found', ()=>contains(friendlyErr('auth/user-not-found'),'No account'));
+  it('wrong-password', ()=>contains(friendlyErr('auth/wrong-password'),'Incorrect password'));
+  it('email-already-in-use',()=>contains(friendlyErr('auth/email-already-in-use'),'already exists'));
+  it('weak-password',   ()=>contains(friendlyErr('auth/weak-password'),'6 characters'));
+  it('invalid-email',   ()=>contains(friendlyErr('auth/invalid-email'),'valid email'));
+  it('invalid-credential',()=>contains(friendlyErr('auth/invalid-credential'),'Incorrect email'));
+  it('popup-blocked',   ()=>contains(friendlyErr('auth/popup-blocked'),'Popup'));
+  it('operation-not-allowed',()=>contains(friendlyErr('auth/operation-not-allowed'),'SETUP.md'));
+  it('unknown code returns fallback', ()=>contains(friendlyErr('auth/random-code'),'went wrong'));
+  it('empty string returns fallback', ()=>contains(friendlyErr(''),'went wrong'));
+});
+
+suite('Calculator math — BMR (Mifflin-St Jeor)', ()=>{
+  // Reference: male 185lb, 5ft10in, age 30 → BMR should be ~1934
+  it('male BMR is plausible', ()=>{
+    const r=computeMacros(185,5,10,30,'male',1.0,0,1.0);
+    assert(r.bmr>1700&&r.bmr<2200,`BMR ${r.bmr} out of plausible range`);
+  });
+  it('female BMR is lower than male (same stats)', ()=>{
+    const m=computeMacros(140,5,5,28,'male',1.0,0,1.0);
+    const f=computeMacros(140,5,5,28,'female',1.0,0,1.0);
+    assert(f.bmr<m.bmr,`Female BMR (${f.bmr}) should be less than male (${m.bmr})`);
+  });
+  it('male 185lb/5\'10/30 BMR within known range ±20', ()=>{
+    const r=computeMacros(185,5,10,30,'male',1.0,0,1.0);
+    approx(r.bmr,1934,20);
+  });
+  it('female 130lb/5\'5/25 BMR within known range ±20', ()=>{
+    const r=computeMacros(130,5,5,25,'female',1.0,0,1.0);
+    approx(r.bmr,1437,20);
+  });
+  it('older person has lower BMR', ()=>{
+    const young=computeMacros(170,5,8,25,'male',1.0,0,1.0);
+    const old  =computeMacros(170,5,8,60,'male',1.0,0,1.0);
+    assert(old.bmr<young.bmr,'Older BMR should be lower');
+  });
+});
+
+suite('Calculator math — TDEE & targets', ()=>{
+  it('sedentary TDEE < moderate TDEE', ()=>{
+    const sed=computeMacros(185,5,10,30,'male',1.2,0,1.0);
+    const mod=computeMacros(185,5,10,30,'male',1.55,0,1.0);
+    assert(sed.tdee<mod.tdee);
+  });
+  it('deficit reduces target calories', ()=>{
+    const maint=computeMacros(185,5,10,30,'male',1.55,0,1.0);
+    const cut  =computeMacros(185,5,10,30,'male',1.55,-500,1.0);
+    assert(cut.targetCals<maint.targetCals);
+  });
+  it('surplus increases target calories', ()=>{
+    const maint=computeMacros(185,5,10,30,'male',1.55,0,1.0);
+    const bulk =computeMacros(185,5,10,30,'male',1.55,500,1.0);
+    assert(bulk.targetCals>maint.targetCals);
+  });
+  it('target cals never below 1200 floor', ()=>{
+    const r=computeMacros(90,4,11,80,'female',1.2,-1000,1.2);
+    assert(r.targetCals>=1200,`targetCals ${r.targetCals} is below 1200 floor`);
+  });
+  it('protein scales with body weight', ()=>{
+    const light=computeMacros(130,5,5,30,'female',1.55,0,1.0);
+    const heavy=computeMacros(220,5,5,30,'female',1.55,0,1.0);
+    assert(heavy.protein>light.protein);
+  });
+});
+
+suite('Calculator math — macro floors', ()=>{
+  it('fat never below 30g floor', ()=>{
+    const r=computeMacros(90,4,11,80,'female',1.2,-1000,1.2);
+    assert(r.fat>=30,`fat ${r.fat} below 30g floor`);
+  });
+  it('carbs never below 20g floor', ()=>{
+    const r=computeMacros(90,4,11,80,'female',1.2,-1000,1.2);
+    assert(r.carb>=20,`carbs ${r.carb} below 20g floor`);
+  });
+  it('higher protein ratio → more protein grams', ()=>{
+    const lo=computeMacros(185,5,10,30,'male',1.55,0,0.7);
+    const hi=computeMacros(185,5,10,30,'male',1.55,0,1.2);
+    assert(hi.protein>lo.protein);
+  });
+  it('protein + fat + carb calories roughly equal targetCals', ()=>{
+    const r=computeMacros(185,5,10,30,'male',1.55,0,1.0);
+    const total=r.protein*4+r.fat*9+r.carb*4;
+    assert(Math.abs(total-r.targetCals)<100,`Macro sum ${total} vs target ${r.targetCals}`);
+  });
+});
+
+suite('renderBars — HTML output', ()=>{
+  const tgt={carb:200,fat:80,protein:160};
+  it('contains all three macro labels', ()=>{
+    const html=renderBars({carb:100,fat:40,protein:80},tgt);
+    contains(html,'Carbs'); contains(html,'Fat'); contains(html,'Protein');
+  });
+  it('50% fill → width:50%', ()=>{
+    const html=renderBars({carb:100,fat:80,protein:160},tgt);
+    contains(html,'width:50%');
+  });
+  it('over target → danger color applied', ()=>{
+    const html=renderBars({carb:300,fat:80,protein:160},tgt);
+    contains(html,'var(--danger)');
+  });
+  it('zero target → no percentage bar (0% width)', ()=>{
+    const html=renderBars({carb:50,fat:20,protein:30},{carb:0,fat:0,protein:0});
+    contains(html,'width:0%');
+  });
+  it('100% fill → width:100%', ()=>{
+    const html=renderBars({carb:200,fat:80,protein:160},tgt);
+    contains(html,'width:100%');
+  });
+  it('shows eaten/target format (e.g. 100/200g)', ()=>{
+    const html=renderBars({carb:100,fat:40,protein:80},tgt);
+    contains(html,'100'); contains(html,'/200g'); contains(html,'/80g');
+  });
+});
+
+suite('calRingHtml — pie chart SVG', ()=>{
+  it('returns empty string when no data', ()=>{
+    eq(calRingHtml('1999-01-01'),'');
+  });
+  it('returns SVG for date with mealCache data', ()=>{
+    mealCache['2026-01-01']=[{carb:100,fat:40,protein:80}];
+    const html=calRingHtml('2026-01-01');
+    contains(html,'<svg');
+    delete mealCache['2026-01-01'];
+  });
+  it('returns SVG for date with dayTotals data', ()=>{
+    dayTotals['2026-01-02']={carb:120,fat:50,protein:90};
+    const html=calRingHtml('2026-01-02');
+    contains(html,'<svg');
+    delete dayTotals['2026-01-02'];
+  });
+  it('all-protein diet uses protein color', ()=>{
+    mealCache['2026-01-03']=[{carb:0,fat:0,protein:100}];
+    const html=calRingHtml('2026-01-03');
+    contains(html,'78,205,196'); // teal = protein
+    delete mealCache['2026-01-03'];
+  });
+  it('all-carb diet uses carb color', ()=>{
+    mealCache['2026-01-04']=[{carb:200,fat:0,protein:0}];
+    const html=calRingHtml('2026-01-04');
+    contains(html,'245,166,35'); // amber = carbs
+    delete mealCache['2026-01-04'];
+  });
+  it('single macro → full circle path (not arc)', ()=>{
+    mealCache['2026-01-05']=[{carb:100,fat:0,protein:0}];
+    const html=calRingHtml('2026-01-05');
+    contains(html,'<circle'); // full circle when pct >= 0.999
+    delete mealCache['2026-01-05'];
+  });
+  it('mealCache takes priority over dayTotals', ()=>{
+    mealCache['2026-01-06']=[{carb:50,fat:20,protein:30}];
+    dayTotals['2026-01-06']={carb:999,fat:999,protein:999};
+    const html=calRingHtml('2026-01-06');
+    notContains(html,'999');
+    delete mealCache['2026-01-06']; delete dayTotals['2026-01-06'];
+  });
+  it('returns empty when all macros are zero', ()=>{
+    mealCache['2026-01-07']=[{carb:0,fat:0,protein:0}];
+    eq(calRingHtml('2026-01-07'),'');
+    delete mealCache['2026-01-07'];
+  });
+});
+
+suite('toggleCalendar — show / hide calendar', ()=>{
+  it('hidden calendar becomes visible on first toggle', ()=>{
+    document.getElementById('calendarWrap').style.display='none';
+    toggleCalendar();
+    eq(document.getElementById('calendarWrap').style.display,'block');
+  });
+  it('button text changes to ✕ Close when open', ()=>{
+    document.getElementById('calendarWrap').style.display='block';
+    document.getElementById('calToggleBtn').textContent='📅 History';
+    toggleCalendar();
+    eq(document.getElementById('calToggleBtn').textContent,'📅 History');
+  });
+  it('visible calendar hides on second toggle', ()=>{
+    document.getElementById('calendarWrap').style.display='block';
+    toggleCalendar();
+    eq(document.getElementById('calendarWrap').style.display,'none');
+  });
+  it('toggle is idempotent across even number of calls', ()=>{
+    document.getElementById('calendarWrap').style.display='none';
+    toggleCalendar(); toggleCalendar();
+    eq(document.getElementById('calendarWrap').style.display,'none');
+  });
+});
+
+suite('goBackToToday — resets to today', ()=>{
+  it('resets activeDate to TODAY_DATE', ()=>{
+    activeDate='2025-01-01';
+    goBackToToday();
+    eq(activeDate,TODAY_DATE);
+  });
+  it('hides calendar wrap', ()=>{
+    document.getElementById('calendarWrap').style.display='block';
+    goBackToToday();
+    eq(document.getElementById('calendarWrap').style.display,'none');
+  });
+  it('resets calendar toggle button text', ()=>{
+    document.getElementById('calToggleBtn').textContent='✕ Close';
+    goBackToToday();
+    eq(document.getElementById('calToggleBtn').textContent,'📅 History');
+  });
+});
+
+suite('showAuth — resets auth screen state', ()=>{
+  it('re-enables disabled Google button', ()=>{
+    const btn=document.getElementById('auth-btn');
+    btn.disabled=true; btn.style.opacity='0.6';
+    showAuth();
+    eq(btn.disabled,false);
+    eq(btn.style.opacity,'1');
+  });
+  it('hides auth error message', ()=>{
+    document.getElementById('auth-error').style.display='block';
+    showAuth();
+    eq(document.getElementById('auth-error').style.display,'none');
+  });
+  it('shows auth screen', ()=>{
+    document.getElementById('screen-auth').style.display='none';
+    showAuth();
+    eq(document.getElementById('screen-auth').style.display,'flex');
+  });
+  it('removes visible class from app screen', ()=>{
+    document.getElementById('screen-app').classList.add('visible');
+    showAuth();
+    assert(!document.getElementById('screen-app').classList.contains('visible'));
+  });
+});
+
+suite('renderAll — hero card updates', ()=>{
+  it('shows calories eaten when no target set', ()=>{
+    activeDate=TODAY_DATE;
+    targets[dateToDay(TODAY_DATE)]={carb:0,fat:0,protein:0};
+    mealCache[TODAY_DATE]=[{carb:100,fat:40,protein:80}];
+    renderAll();
+    const rem=document.getElementById('heroRemaining').textContent;
+    assert(rem.length>0,'heroRemaining should not be empty');
+    delete mealCache[TODAY_DATE];
+  });
+  it('shows remaining when target is set and under', ()=>{
+    activeDate=TODAY_DATE;
+    targets[dateToDay(TODAY_DATE)]={carb:200,fat:80,protein:160};
+    mealCache[TODAY_DATE]=[{carb:50,fat:20,protein:40}];
+    renderAll();
+    eq(document.getElementById('heroRemLabel').textContent,'kcal remaining');
+    delete mealCache[TODAY_DATE];
+  });
+  it('shows over label when calories exceed target', ()=>{
+    activeDate=TODAY_DATE;
+    targets[dateToDay(TODAY_DATE)]={carb:50,fat:20,protein:40};
+    mealCache[TODAY_DATE]=[{carb:200,fat:80,protein:160}];
+    renderAll();
+    eq(document.getElementById('heroRemLabel').textContent,'kcal over');
+    delete mealCache[TODAY_DATE];
+  });
+  it('hides log form and shows back button for past date', ()=>{
+    activeDate='2025-01-01';
+    mealCache['2025-01-01']=[];
+    renderAll();
+    eq(document.getElementById('logCard').style.display,'none');
+    eq(document.getElementById('backToTodayBtn').style.display,'');
+    activeDate=TODAY_DATE;
+    delete mealCache['2025-01-01'];
+  });
+  it('shows log form and hides back button for today', ()=>{
+    activeDate=TODAY_DATE;
+    mealCache[TODAY_DATE]=[];
+    renderAll();
+    eq(document.getElementById('logCard').style.display,'');
+    eq(document.getElementById('backToTodayBtn').style.display,'none');
+    delete mealCache[TODAY_DATE];
+  });
+  it('greeting text is Viewing for past date', ()=>{
+    activeDate='2025-06-15';
+    mealCache['2025-06-15']=[];
+    renderAll();
+    eq(document.getElementById('todayGreeting').textContent,'Viewing');
+    activeDate=TODAY_DATE;
+    delete mealCache['2025-06-15'];
+  });
+});
+
+suite('Calculator form validation', ()=>{
+  function clearCalcForm(){
+    ['calcWeight','calcAge','calcFt','calcIn'].forEach(id=>{
+      document.getElementById(id).value='';
+      document.getElementById(id).style.borderColor='';
+    });
+    document.getElementById('calcError').style.display='none';
+    document.getElementById('calcResults').style.display='none';
+    _calcResult=null;
+  }
+
+  it('empty form shows error message', ()=>{
+    clearCalcForm();
+    runCalculator();
+    eq(document.getElementById('calcError').style.display,'block');
+    eq(document.getElementById('calcResults').style.display,'none');
+  });
+  it('missing weight highlights weight field', ()=>{
+    clearCalcForm();
+    document.getElementById('calcAge').value='30';
+    document.getElementById('calcFt').value='5';
+    document.getElementById('calcIn').value='10';
+    runCalculator();
+    assert(document.getElementById('calcWeight').style.borderColor.includes('danger')||
+           document.getElementById('calcWeight').style.borderColor!=='');
+  });
+  it('missing height highlights height fields', ()=>{
+    clearCalcForm();
+    document.getElementById('calcWeight').value='185';
+    document.getElementById('calcAge').value='30';
+    runCalculator();
+    assert(document.getElementById('calcFt').style.borderColor!=='');
+    assert(document.getElementById('calcIn').style.borderColor!=='');
+  });
+  it('valid inputs hide error and show results', ()=>{
+    clearCalcForm();
+    document.getElementById('calcWeight').value='185';
+    document.getElementById('calcAge').value='30';
+    document.getElementById('calcFt').value='5';
+    document.getElementById('calcIn').value='10';
+    runCalculator();
+    eq(document.getElementById('calcError').style.display,'none');
+    eq(document.getElementById('calcResults').style.display,'block');
+    assert(_calcResult!==null,'_calcResult should be set');
+  });
+  it('valid calculation produces positive macro values', ()=>{
+    clearCalcForm();
+    document.getElementById('calcWeight').value='150';
+    document.getElementById('calcAge').value='25';
+    document.getElementById('calcFt').value='5';
+    document.getElementById('calcIn').value='6';
+    runCalculator();
+    assert(_calcResult.protein>0);
+    assert(_calcResult.fat>=30);
+    assert(_calcResult.carb>=20);
+    assert(_calcResult.targetCals>=1200);
+  });
+});
+
+suite('addMeal — form validation and caching', ()=>{
+  function clearMealForm(){
+    ['mealName','mCarb','mFat','mProtein'].forEach(id=>document.getElementById(id).value='');
+    delete mealCache[TODAY_DATE];
+    activeDate=TODAY_DATE;
+  }
+
+  it('empty name returns false and does not add meal', ()=>{
+    clearMealForm();
+    const result=addMeal();
+    eq(result,false);
+    eq((mealCache[TODAY_DATE]||[]).length,0);
+  });
+  it('valid name adds meal to mealCache', ()=>{
+    clearMealForm();
+    document.getElementById('mealName').value='Oatmeal';
+    document.getElementById('mCarb').value='50';
+    document.getElementById('mFat').value='5';
+    document.getElementById('mProtein').value='8';
+    const result=addMeal();
+    eq(result,true);
+    eq(mealCache[TODAY_DATE].length,1);
+    eq(mealCache[TODAY_DATE][0].name,'Oatmeal');
+  });
+  it('meal macros stored correctly', ()=>{
+    clearMealForm();
+    document.getElementById('mealName').value='Chicken';
+    document.getElementById('mCarb').value='0';
+    document.getElementById('mFat').value='8';
+    document.getElementById('mProtein').value='45';
+    addMeal();
+    const m=mealCache[TODAY_DATE][0];
+    eq(m.fat,8); eq(m.protein,45); eq(m.carb,0);
+  });
+  it('missing macros default to 0', ()=>{
+    clearMealForm();
+    document.getElementById('mealName').value='Apple';
+    addMeal();
+    const m=mealCache[TODAY_DATE][0];
+    eq(m.carb,0); eq(m.fat,0); eq(m.protein,0);
+  });
+  it('form fields cleared after successful add', ()=>{
+    clearMealForm();
+    document.getElementById('mealName').value='Salad';
+    document.getElementById('mCarb').value='15';
+    addMeal();
+    eq(document.getElementById('mealName').value,'');
+    eq(document.getElementById('mCarb').value,'');
+  });
+  it('multiple meals accumulate in cache', ()=>{
+    clearMealForm();
+    ['Breakfast','Lunch','Dinner'].forEach(name=>{
+      document.getElementById('mealName').value=name;
+      addMeal();
+    });
+    eq(mealCache[TODAY_DATE].length,3);
+  });
+  it('meal stored with correct date', ()=>{
+    clearMealForm();
+    activeDate='2026-03-15';
+    document.getElementById('mealName').value='Late lunch';
+    addMeal();
+    eq(mealCache['2026-03-15'][0].date,'2026-03-15');
+    delete mealCache['2026-03-15'];
+    activeDate=TODAY_DATE;
+  });
+});
+
+// ══════════════════════════════════════════════════
+//  RUN + RENDER
+// ══════════════════════════════════════════════════
+let totalPass=0,totalFail=0;
+const resultsEl=document.getElementById('results');
+
+for(const s of suites){
+  const div=document.createElement('div');
+  div.className='suite';
+  div.innerHTML=`<div class="suite-name">${s.name}</div>`;
+  for(const t of s.tests){
+    let ok=true,errMsg='';
+    try{ t.fn(); totalPass++; }
+    catch(e){ ok=false; errMsg=e.message; totalFail++; }
+    const row=document.createElement('div');
+    row.className=`test ${ok?'pass':'fail'}`;
+    row.innerHTML=`<div class="badge ${ok?'pass':'fail'}">${ok?'✓':'✕'}</div>
+      <div class="test-name">${t.name}${!ok?`<div class="err">${errMsg}</div>`:''}</div>`;
+    div.appendChild(row);
+  }
+  resultsEl.appendChild(div);
+}
+
+const total=totalPass+totalFail;
+const pct=Math.round(totalPass/total*100);
+document.getElementById('summary').innerHTML=`
+  <div class="sum-item"><div class="sum-num" style="color:var(--pass)">${totalPass}</div><div class="sum-lbl">Passed</div></div>
+  <div class="sum-item"><div class="sum-num" style="color:${totalFail?'var(--fail)':'var(--muted)'}">${totalFail}</div><div class="sum-lbl">Failed</div></div>
+  <div class="sum-item"><div class="sum-num" style="color:var(--accent)">${total}</div><div class="sum-lbl">Total</div></div>
+  <div class="sum-item"><div class="sum-num" style="color:${pct===100?'var(--pass)':pct>80?'var(--warn)':'var(--fail)'}">${pct}%</div><div class="sum-lbl">Pass rate</div></div>`;
+</script>
+</body>
+</html>

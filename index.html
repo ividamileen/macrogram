@@ -872,6 +872,9 @@ function friendlyErr(c){ return ({
 })[c]||'Something went wrong. Please try again.'; }
 
 function showAuth(){
+  const btn=document.getElementById('auth-btn');
+  if(btn){ btn.disabled=false; btn.style.opacity='1'; }
+  document.getElementById('auth-error').style.display='none';
   document.getElementById('screen-auth').style.display='flex';
   document.getElementById('screen-app').classList.remove('visible');
 }

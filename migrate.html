@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Macrogram — Data Migration</title>
+<style>
+  body{font-family:sans-serif;background:#0f0f13;color:#e8e8f0;max-width:520px;margin:40px auto;padding:20px;}
+  h2{color:#a78bfa;}
+  pre{background:#1a1a2e;padding:12px;border-radius:8px;font-size:0.75rem;overflow:auto;max-height:200px;}
+  button{background:#7c3aed;color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:1rem;cursor:pointer;margin-top:16px;}
+  button:disabled{opacity:0.5;cursor:not-allowed;}
+  #log{margin-top:20px;background:#1a1a2e;padding:12px;border-radius:8px;font-size:0.8rem;min-height:60px;white-space:pre-wrap;}
+  .ok{color:#4ecdcc;} .err{color:#e05c5c;} .warn{color:#f5a623;}
+</style>
+</head>
+<body>
+<h2>Macrogram — History Import</h2>
+<p>This page imports your last week of data from the old app into Firebase. You must be signed into Macrogram first.</p>
+<p>Data to import:</p>
+<pre id="preview"></pre>
+<button id="importBtn" onclick="runImport()">Import to Firebase</button>
+<div id="log">Waiting…</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+// ── Firebase config (same as index.html) ─────────────────────────────────────
+firebase.initializeApp({
+  apiKey: "AIzaSyBLXeeoxtjb2bO2QiO3Qogz1jK212EPmbA",
+  authDomain: "macrogram-525cb.firebaseapp.com",
+  projectId: "macrogram-525cb",
+  storageBucket: "macrogram-525cb.firebasestorage.app",
+  messagingSenderId: "901347405907",
+  appId: "1:901347405907:web:7bc283936772e05b85d6a6"
+});
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// ── Source data ───────────────────────────────────────────────────────────────
+const RAW_MEALS = {"Mon_2026-04-06":[{"name":"Avocado","carb":12,"fat":21,"protein":2},{"name":"Omelette (3 eggs, olive oil, onion, spinach)","carb":3.5,"fat":29,"protein":18.5},{"name":"½ Magic Spoon Frosted Strawberry Pastry","carb":13,"fat":3.5,"protein":5.5},{"name":"1oz Nurri Chocolate Protein Shake","carb":0.7,"fat":0.3,"protein":1.7},{"name":"200 gm greek yogurt with 10 raspberries","carb":11,"fat":4,"protein":20},{"name":"protein shake","carb":10,"fat":2.25,"protein":10.5}],"Mon_2026-04-07":[{"name":"Avocado","carb":12,"fat":21,"protein":2},{"name":"Omlette","carb":3.5,"fat":29,"protein":18.5},{"name":"protein shake","carb":10,"fat":2.25,"protein":10.5},{"name":"greek yogurt with raspberries","carb":11,"fat":4,"protein":20},{"name":"nurri shake","carb":0.7,"fat":0.3,"protein":1.7},{"name":"protein bar","carb":13,"fat":3.5,"protein":5.5},{"name":"Chipotle bowl","carb":19,"fat":30,"protein":53}],"Tue_2026-04-07":[{"name":"Sweet greens power greens bowl","carb":54,"fat":44,"protein":67},{"name":"250g greek yogurt with raspberries","carb":14,"fat":5.4,"protein":25},{"name":"4 eggs with 1 tbsp ghee","carb":0,"fat":34,"protein":24}],"Wed_2026-04-07":[{"name":"chipotle bowl","carb":80,"fat":39,"protein":84},{"name":"greek yogurt","carb":4,"fat":2,"protein":10},{"name":"panettone","carb":17,"fat":3,"protein":3},{"name":"rice and potato curry","carb":71,"fat":6,"protein":0}],"Thu_2026-04-07":[{"name":"eid meal","carb":200,"fat":36,"protein":51},{"name":"one boiled egg","carb":0,"fat":5.3,"protein":6.3}],"Fri_2026-04-07":[{"name":"sweetgreen power green bowl","carb":51,"fat":51,"protein":39},{"name":"peanuts","carb":6,"fat":15,"protein":8},{"name":"chicken biryani","carb":48,"fat":15,"protein":27},{"name":"170g greek yogurt with 200g grapes and 52g raspberries","carb":45.5,"fat":4,"protein":18.8},{"name":"yogurt","carb":11,"fat":4,"protein":20}],"Sat_2026-04-07":[{"name":"coffee","carb":26,"fat":7.7,"protein":7.7},{"name":"rice with mango pickle","carb":31,"fat":7.8,"protein":3},{"name":"rice with sambar and vadiyalu","carb":58,"fat":9.8,"protein":11.5},{"name":"yogurt drink with rice","carb":16,"fat":1.6,"protein":3.3},{"name":"pizza","carb":73,"fat":23,"protein":29},{"name":"cake","carb":43,"fat":13.5,"protein":4.5}],"Sun_2026-04-07":[{"name":"pesarattu 2","carb":40,"fat":7,"protein":17},{"name":"chicken and rice","carb":64,"fat":19.5,"protein":33},{"name":"apple","carb":10,"fat":0,"protein":0},{"name":"pumpkin seeds","carb":1.5,"fat":7,"protein":4},{"name":"orange","carb":9,"fat":0,"protein":0},{"name":"2eggs and 3 egg whites with half white toast","carb":7.7,"fat":14,"protein":25}]};
+
+const RAW_WEIGHT = [{"date":"2026-04-07","weight":146,"notes":"morning"},{"date":"2026-04-10","weight":143,"notes":"morning"},{"date":"2026-04-11","weight":142.5,"notes":"morning"},{"date":"2026-04-12","weight":141.8,"notes":"morning"}];
+
+const RAW_TARGETS = {"Mon":{"carb":56,"fat":83,"protein":131},"Tue":{"carb":56,"fat":83,"protein":131},"Wed":{"carb":168,"fat":50,"protein":93},"Thu":{"carb":143,"fat":42,"protein":79},"Fri":{"carb":168,"fat":50,"protein":93},"Sat":{"carb":168,"fat":50,"protein":93},"Sun":{"carb":143,"fat":42,"protein":79}};
+
+const RAW_RECIPES = [{"name":"High-Protein Omelette","emoji":"🍳","desc":"3 eggs, olive oil, onion, spinach","carb":3.5,"fat":29,"protein":18.5,"cat":"Breakfast"},{"name":"Avocado (1 medium)","emoji":"🥑","desc":"","carb":12,"fat":21,"protein":2,"cat":"Snack"},{"name":"Chipotle Double Chicken Bowl","emoji":"🌯","desc":"Double chicken, lettuce, fajita veggies, salsa — no rice or beans","carb":5,"fat":12,"protein":52,"cat":"Lunch"},{"name":"Fage 2% Greek Yogurt (¾ cup)","emoji":"🥛","desc":"1 serving","carb":5,"fat":3.5,"protein":17,"cat":"Snack"}];
+
+const RAW_PROFILE = {"name":"Neelima Divi","age":"35","height":"5'4\"","gender":"Female","goal":"Fat Loss","notes":""};
+
+// ── Date helpers ──────────────────────────────────────────────────────────────
+const DAY_OFFSET = {Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6};
+
+function getMondayOf(dateStr){
+  const d = new Date(dateStr+'T12:00:00');
+  const dow = d.getDay(); // 0=Sun
+  const diff = dow===0 ? -6 : 1-dow;
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().slice(0,10);
+}
+
+function resolveDate(key){
+  const [dayName, refDate] = key.split('_');
+  const monday = getMondayOf(refDate);
+  const d = new Date(monday+'T12:00:00');
+  d.setDate(d.getDate()+(DAY_OFFSET[dayName]??0));
+  return d.toISOString().slice(0,10);
+}
+
+// ── Build meal list with resolved dates ───────────────────────────────────────
+const mealsByDate = {};
+for(const [key, meals] of Object.entries(RAW_MEALS)){
+  const date = resolveDate(key);
+  if(!mealsByDate[date]) mealsByDate[date]=[];
+  mealsByDate[date].push(...meals);
+}
+
+// ── Preview ───────────────────────────────────────────────────────────────────
+const summary = Object.entries(mealsByDate)
+  .sort(([a],[b])=>a.localeCompare(b))
+  .map(([d,ms])=>`${d}: ${ms.length} meals`)
+  .join('\n');
+document.getElementById('preview').textContent =
+  summary + '\n\nWeight entries: '+RAW_WEIGHT.length+
+  '\nRecipes: '+RAW_RECIPES.length+
+  '\nTargets: '+Object.keys(RAW_TARGETS).join(', ')+
+  '\nProfile: '+RAW_PROFILE.name;
+
+// ── Logging ───────────────────────────────────────────────────────────────────
+function log(msg, cls=''){
+  const el=document.getElementById('log');
+  el.innerHTML += `<span class="${cls}">${msg}</span>\n`;
+}
+
+// ── Import ────────────────────────────────────────────────────────────────────
+async function runImport(){
+  const btn = document.getElementById('importBtn');
+  btn.disabled=true;
+  document.getElementById('log').textContent='';
+
+  const user = auth.currentUser;
+  if(!user){
+    log('❌ Not signed in. Open the main Macrogram app, sign in, then come back here.','err');
+    btn.disabled=false;
+    return;
+  }
+  log(`Signed in as ${user.email}  ✓`,'ok');
+
+  const uid = user.uid;
+  const userRef = db.collection('users').doc(uid);
+  const sub = col => userRef.collection(col);
+  const ST = () => firebase.firestore.FieldValue.serverTimestamp();
+
+  // 1. Meals
+  log('\nImporting meals…');
+  let mealCount=0;
+  for(const [date, meals] of Object.entries(mealsByDate)){
+    for(const m of meals){
+      await sub('meals').add({name:m.name,carb:+m.carb,fat:+m.fat,protein:+m.protein,date,createdAt:ST()});
+      mealCount++;
+    }
+    log(`  ${date}: ${meals.length} meals written`,'ok');
+  }
+  log(`✓ ${mealCount} meals imported`,'ok');
+
+  // 2. Weight
+  log('\nImporting weight log…');
+  for(const w of RAW_WEIGHT){
+    await sub('weight').add({date:w.date,weight:+w.weight,notes:w.notes||'',createdAt:ST()});
+    log(`  ${w.date}: ${w.weight} lbs`,'ok');
+  }
+  log(`✓ ${RAW_WEIGHT.length} weight entries imported`,'ok');
+
+  // 3. Targets
+  log('\nImporting targets…');
+  const tbatch = db.batch();
+  for(const [day,t] of Object.entries(RAW_TARGETS)){
+    tbatch.set(sub('targets').doc(day),{carb:+t.carb,fat:+t.fat,protein:+t.protein});
+  }
+  await tbatch.commit();
+  log('✓ Targets imported (Mon–Sun)','ok');
+
+  // 4. Recipes
+  log('\nImporting recipes…');
+  for(const r of RAW_RECIPES){
+    await sub('recipes').add({name:r.name,emoji:r.emoji||'',desc:r.desc||'',carb:+r.carb,fat:+r.fat,protein:+r.protein,cat:r.cat||'',createdAt:ST()});
+    log(`  ${r.name}`,'ok');
+  }
+  log(`✓ ${RAW_RECIPES.length} recipes imported`,'ok');
+
+  // 5. Profile
+  log('\nImporting profile…');
+  await userRef.update({profile:RAW_PROFILE});
+  log('✓ Profile imported','ok');
+
+  log('\n🎉 All done! Reload the main app to see your data.','ok');
+}
+
+// Check auth on load
+auth.onAuthStateChanged(u=>{
+  if(u) log(`Ready. Signed in as ${u.email} — click Import to proceed.`,'ok');
+  else  log('⚠ Not signed in. Go to the main app and sign in first, then return here.','warn');
+});
+</script>
+</body>
+</html>

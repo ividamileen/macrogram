@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "predeploy": ["node -e \"const fs=require('fs');const s=fs.readFileSync('sw.js','utf8');fs.writeFileSync('sw.js',s.replace(/macrogram-v\\d+/,'macrogram-v'+Date.now()))\""],
     "public": ".",
     "ignore": [
       "firebase.json",

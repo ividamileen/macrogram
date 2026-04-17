@@ -80,8 +80,8 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
 .cal-dow{font-family:'Syne',sans-serif;font-weight:700;font-size:0.58rem;letter-spacing:0.5px;text-transform:uppercase;color:var(--muted);text-align:center;padding:4px 0 6px;}
 .cal-cell{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;aspect-ratio:1;border-radius:8px;cursor:pointer;transition:all 0.15s;font-family:'Syne',sans-serif;font-weight:700;font-size:0.78rem;}
-.cal-ring{position:absolute;inset:1px;pointer-events:none;}
-.cal-cell.selected .cal-ring{opacity:0.35;}
+.cal-ring{position:absolute;inset:2px;pointer-events:none;border-radius:6px;overflow:hidden;}
+.cal-cell.selected .cal-ring{opacity:0.25;}
 .cal-cell:hover:not(.empty){background:rgba(255,255,255,0.05);}
 .cal-cell.empty{pointer-events:none;}
 .cal-cell.other-month .cal-num{opacity:0.25;}
@@ -996,49 +996,44 @@ function renderBars(tot,tgt){
 //  CALENDAR
 // ════════════════════════════════════════════════════
 
-// Build the SVG progress ring for a calendar date cell
+// Build a macro-split pie chart for a calendar date cell.
+// Slice proportions = share of total calories eaten that day (C/F/P).
 function calRingHtml(ds){
-  // Prefer live cache (real-time after adding/deleting), fall back to month snapshot
   const tot = mealCache[ds] ? calcTotals(mealCache[ds]) : dayTotals[ds];
   if(!tot) return '';
-  const cals = calcCals(tot);
-  if(!cals) return '';
+  const cCals=(tot.carb||0)*4, fCals=(tot.fat||0)*9, pCals=(tot.protein||0)*4;
+  const total=cCals+fCals+pCals;
+  if(!total) return '';
 
-  const dayName = dateToDay(ds);
-  const tgt  = targets[dayName] || {carb:0,fat:0,protein:0};
-  const tCals = calcCals(tgt);
+  const cx=18,cy=18,r=13;
+  const slices=[
+    {pct:cCals/total, fill:'rgba(245,166,35,0.82)'},   // carbs  — amber
+    {pct:fCals/total, fill:'rgba(224,92,92,0.82)'},    // fat    — coral
+    {pct:pCals/total, fill:'rgba(78,205,196,0.82)'},   // protein— teal
+  ].filter(s=>s.pct>0.005);
 
-  // Three-ring design: one arc each for carbs, fat, protein
-  // Each ring shows that macro's completion % as a clockwise arc
-  const R=[14,10,6]; // radii: outer=carbs, mid=fat, inner=protein
-  const macros=[
-    {key:'carb',  color:'var(--carb)',    r:R[0]},
-    {key:'fat',   color:'var(--fat)',     r:R[1]},
-    {key:'protein',color:'var(--protein)',r:R[2]},
-  ];
-
-  const rings = macros.map(m=>{
-    const eaten = tot[m.key]||0;
-    const goal  = tgt[m.key]||0;
-    if(!goal) return '';
-    const pct   = Math.min(eaten/goal, 1);
-    const over  = eaten > goal;
-    const C     = 2*Math.PI*m.r;
-    const fill  = C*pct;
-    const off   = C - fill;
-    const stroke= over ? 'var(--danger)' : m.color;
-    return `<circle cx="18" cy="18" r="${m.r}" fill="none" stroke="var(--border)" stroke-width="2.2"/>
-<circle cx="18" cy="18" r="${m.r}" fill="none" stroke="${stroke}" stroke-width="2.2"
-  stroke-linecap="round" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}"
-  transform="rotate(-90 18 18)"/>`;
+  let angle=-Math.PI/2; // start at 12 o'clock
+  const paths=slices.map(s=>{
+    const a0=angle, a1=angle+s.pct*2*Math.PI;
+    angle=a1;
+    if(s.pct>=0.999) return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${s.fill}"/>`;
+    const x0=+(cx+r*Math.cos(a0)).toFixed(2), y0=+(cy+r*Math.sin(a0)).toFixed(2);
+    const x1=+(cx+r*Math.cos(a1)).toFixed(2), y1=+(cy+r*Math.sin(a1)).toFixed(2);
+    return `<path d="M${cx},${cy}L${x0},${y0}A${r},${r} 0 ${s.pct>0.5?1:0},1 ${x1},${y1}Z" fill="${s.fill}"/>`;
   }).join('');
 
-  // Fallback if no targets set: single grey ring showing "something was logged"
-  if(!rings.trim()){
-    return `<svg class="cal-ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="87.96" stroke-dashoffset="22" transform="rotate(-90 18 18)"/></svg>`;
-  }
+  // Thin separator lines between slices for clarity
+  angle=-Math.PI/2;
+  const lines=slices.map(s=>{
+    const lx=+(cx+r*Math.cos(angle)).toFixed(2), ly=+(cy+r*Math.sin(angle)).toFixed(2);
+    angle+=s.pct*2*Math.PI;
+    return slices.length>1?`<line x1="${cx}" y1="${cy}" x2="${lx}" y2="${ly}" stroke="var(--card)" stroke-width="0.8"/>`:'';
+  }).join('');
 
-  return `<svg class="cal-ring" viewBox="0 0 36 36">${rings}</svg>`;
+  return `<svg class="cal-ring" viewBox="0 0 36 36">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--surface)"/>
+    ${paths}${lines}
+  </svg>`;
 }
 
 function renderCalendar(){

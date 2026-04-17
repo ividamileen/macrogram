@@ -235,6 +235,16 @@ canvas.sparkline{width:100%;height:60px;}
 
 /* ── UTILS ── */
 .section-title{font-family:'Syne',sans-serif;font-weight:800;font-size:1.25rem;margin-bottom:3px;}
+/* ── PROFILE PAGE ── */
+.profile-section-label{font-size:0.58rem;color:var(--muted);font-family:'Syne',sans-serif;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;padding:0 2px;}
+.profile-action{display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:border-color 0.15s;margin-bottom:8px;}
+.profile-action:hover{border-color:var(--accent);}
+.profile-action-danger:hover{border-color:rgba(224,92,92,0.5);}
+.profile-action-icon{font-size:1.25rem;flex-shrink:0;width:24px;text-align:center;}
+.profile-action-text{flex:1;}
+.profile-action-title{font-family:'Syne',sans-serif;font-weight:700;font-size:0.88rem;}
+.profile-action-sub{font-size:0.63rem;color:var(--muted);margin-top:2px;}
+.profile-action-arrow{color:var(--muted);font-size:1.1rem;font-weight:300;}
 .section-sub{font-size:0.68rem;color:var(--muted);margin-bottom:16px;}
 .empty{text-align:center;color:var(--muted);font-size:0.74rem;padding:26px 0;font-family:'Syne',sans-serif;line-height:1.6;}
 .tag{display:inline-block;padding:2px 7px;border-radius:5px;font-size:0.59rem;font-family:'Syne',sans-serif;font-weight:700;}
@@ -301,11 +311,7 @@ canvas.sparkline{width:100%;height:60px;}
     <div class="logo">macro<span>gram</span></div>
     <div class="header-right">
       <div class="date-badge" id="dateBadge"></div>
-      <div id="headerAvatar" style="width:28px;height:28px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:0.75rem;color:#0e0f11;flex-shrink:0;overflow:hidden;"></div>
-      <span class="header-user" id="headerUser"></span>
-      <button class="settings-btn" onclick="openModal('calcModal')" style="background:rgba(200,240,90,0.1);border-color:rgba(200,240,90,0.3);color:var(--accent)">🧮 Calc</button>
-      <button class="settings-btn" onclick="openModal('settingsModal')">⚙ Targets</button>
-      <button class="settings-btn" onclick="doSignOut()" style="color:var(--danger);border-color:rgba(224,92,92,0.3);">↩ Out</button>
+      <div id="headerAvatar" onclick="goToProfile()" style="width:32px;height:32px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:0.8rem;color:#0e0f11;flex-shrink:0;overflow:hidden;cursor:pointer;"></div>
     </div>
   </header>
 
@@ -313,6 +319,7 @@ canvas.sparkline{width:100%;height:60px;}
     <button class="top-nav-btn active" onclick="showPage('macros',this)"><span class="nav-icon">🍽</span>Macros</button>
     <button class="top-nav-btn" onclick="showPage('body',this)"><span class="nav-icon">📏</span>Body</button>
     <button class="top-nav-btn" onclick="showPage('recipes',this)"><span class="nav-icon">📖</span>Recipes</button>
+    <button class="top-nav-btn" onclick="showPage('profile',this)"><span class="nav-icon">👤</span>Profile</button>
   </nav>
 
   <!-- ══ MACROS ══ -->
@@ -440,6 +447,47 @@ canvas.sparkline{width:100%;height:60px;}
         style="background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'DM Mono',monospace;font-size:0.84rem;padding:10px 13px;outline:none;width:100%;">
     </div>
     <div id="recipeList"></div>
+  </div>
+
+  <!-- ══ PROFILE ══ -->
+  <div class="page" id="page-profile">
+
+    <!-- User card -->
+    <div class="card" style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
+      <div id="profileAvatarLg" style="width:56px;height:56px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;color:#0e0f11;flex-shrink:0;overflow:hidden;"></div>
+      <div>
+        <div id="profileNameLg" style="font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;"></div>
+        <div id="profileEmailLg" style="font-size:0.68rem;color:var(--muted);margin-top:2px;"></div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="profile-section-label">Tools</div>
+    <div class="profile-action" onclick="openModal('calcModal')">
+      <span class="profile-action-icon">🧮</span>
+      <div class="profile-action-text">
+        <div class="profile-action-title">Macro Calculator</div>
+        <div class="profile-action-sub">Calculate personalised daily targets</div>
+      </div>
+      <span class="profile-action-arrow">›</span>
+    </div>
+    <div class="profile-action" onclick="openModal('settingsModal')">
+      <span class="profile-action-icon">⚙️</span>
+      <div class="profile-action-text">
+        <div class="profile-action-title">Daily Targets</div>
+        <div class="profile-action-sub">Set weekly macro goals by day</div>
+      </div>
+      <span class="profile-action-arrow">›</span>
+    </div>
+
+    <div class="profile-section-label" style="margin-top:8px;">Account</div>
+    <div class="profile-action profile-action-danger" onclick="doSignOut()">
+      <span class="profile-action-icon">↩</span>
+      <div class="profile-action-text">
+        <div class="profile-action-title" style="color:var(--danger)">Sign Out</div>
+      </div>
+    </div>
+
   </div>
 
 </div><!-- /screen-app -->
@@ -945,6 +993,32 @@ function showPage(id,btn){
   if(btn) btn.classList.add('active');
   if(id==='body')    renderBodyPage();
   if(id==='recipes') renderRecipes();
+  if(id==='profile') renderProfilePage();
+}
+
+function goToProfile(){
+  const btn=document.querySelector('.top-nav-btn[onclick*="profile"]');
+  showPage('profile', btn);
+}
+
+function renderProfilePage(){
+  if(!currentUser) return;
+  const name = userProfile.name || currentUser.displayName || currentUser.email?.split('@')[0] || 'User';
+  const email = currentUser.email || '';
+  const photo = currentUser.photoURL || userProfile.photoURL;
+
+  // Large avatar
+  const lg = document.getElementById('profileAvatarLg');
+  if(photo){ lg.style.cssText+=`;background-image:url(${photo});background-size:cover;background-color:transparent;`; lg.textContent=''; }
+  else { lg.textContent=name[0].toUpperCase(); }
+
+  // Also keep header avatar in sync
+  const hdr = document.getElementById('headerAvatar');
+  if(photo){ hdr.style.cssText+=`;background-image:url(${photo});background-size:cover;background-color:transparent;`; hdr.textContent=''; }
+  else { hdr.textContent=name[0].toUpperCase(); }
+
+  document.getElementById('profileNameLg').textContent = name;
+  document.getElementById('profileEmailLg').textContent = email;
 }
 
 // ════════════════════════════════════════════════════

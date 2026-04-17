@@ -877,6 +877,7 @@ function showAuth(){
 }
 
 async function doSignOut(){
+  closeModals();
   await auth.signOut(); currentUser=null;
   mealCache={};datesWithMeals=new Set();dayTotals={};recipes=[];weightLog=[];measurements=[];userProfile={};
   targets=JSON.parse(JSON.stringify(DEFAULT_TARGETS));

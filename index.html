@@ -366,7 +366,7 @@ canvas.sparkline{width:100%;height:60px;}
 
     <!-- Log form (hidden when viewing history) -->
     <div class="card" id="logCard">
-      <div class="card-title">Log a Meal</div>
+      <div class="card-title" id="logCardTitle">Log a Meal</div>
       <div class="fld"><input type="text" id="mealName" placeholder="Meal name (e.g. Chicken Bowl)"></div>
       <div class="form-row-3">
         <div class="fld"><label style="color:var(--carb)">Carbs g</label><input type="number" id="mCarb" placeholder="0" min="0" step="0.1"></div>
@@ -1200,7 +1200,8 @@ function renderAll(){
     ? selDate.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})
     : selDate.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
   document.getElementById('backToTodayBtn').style.display = isToday ? 'none' : '';
-  document.getElementById('logCard').style.display = isPast ? 'none' : '';
+  document.getElementById('logCardTitle').textContent = isPast ? 'Log a Meal (Past Date)' : 'Log a Meal';
+  document.getElementById('logCard').style.display = '';
 
   // Hero
   const dayName = dateToDay(activeDate);

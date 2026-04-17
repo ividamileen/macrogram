@@ -1,6 +1,6 @@
 {
-  "name": "MacroLog",
-  "short_name": "MacroLog",
+  "name": "Macrogram",
+  "short_name": "Macrogram",
   "description": "Macro, body & recipe tracker — shared with friends",
   "start_url": "/",
   "display": "standalone",

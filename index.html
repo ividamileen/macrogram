@@ -975,7 +975,7 @@ function showApp(){
   document.getElementById('screen-app').classList.add('visible');
 
   const name=(userProfile.name||currentUser.displayName||currentUser.email.split('@')[0]).split(' ')[0];
-  document.getElementById('headerUser').textContent=name;
+  const huEl=document.getElementById('headerUser'); if(huEl) huEl.textContent=name;
   // Show Google avatar if available
   const photo = currentUser.photoURL || userProfile.photoURL;
   const avatarEl = document.getElementById('headerAvatar');

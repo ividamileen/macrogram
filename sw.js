@@ -1,4 +1,4 @@
-const CACHE = 'macrolog-v2';
+const CACHE = 'macrolog-v3';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {

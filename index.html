@@ -80,8 +80,9 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
 .cal-dow{font-family:'Syne',sans-serif;font-weight:700;font-size:0.58rem;letter-spacing:0.5px;text-transform:uppercase;color:var(--muted);text-align:center;padding:4px 0 6px;}
 .cal-cell{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;aspect-ratio:1;border-radius:8px;cursor:pointer;transition:all 0.15s;font-family:'Syne',sans-serif;font-weight:700;font-size:0.78rem;}
-.cal-ring{position:absolute;inset:2px;pointer-events:none;border-radius:6px;overflow:hidden;}
-.cal-cell.selected .cal-ring{opacity:0.25;}
+.cal-ring{position:absolute;inset:0;pointer-events:none;}
+.cal-cell.selected .cal-ring{opacity:0.3;}
+.cal-num{position:relative;z-index:1;}
 .cal-cell:hover:not(.empty){background:rgba(255,255,255,0.05);}
 .cal-cell.empty{pointer-events:none;}
 .cal-cell.other-month .cal-num{opacity:0.25;}
@@ -882,7 +883,7 @@ function showAuth(){
 async function doSignOut(){
   closeModals();
   await auth.signOut(); currentUser=null;
-  mealCache={};datesWithMeals=new Set();dayTotals={};recipes=[];weightLog=[];measurements=[];userProfile={};
+  mealCache={};datesWithMeals=new Set();dayTotals={};recipes=[];weightLog=[];measurements=[];userProfile={};calSvgCache.clear();
   targets=JSON.parse(JSON.stringify(DEFAULT_TARGETS));
   activeDate=TODAY_DATE;calYear=new Date().getFullYear();calMonth=new Date().getMonth();
   document.getElementById('screen-app').classList.remove('visible');
@@ -979,8 +980,15 @@ function showApp(){
   const photo = currentUser.photoURL || userProfile.photoURL;
   const avatarEl = document.getElementById('headerAvatar');
   if(avatarEl){
-    if(photo){ avatarEl.style.cssText+=`;background-image:url(${photo});background-size:cover;background-color:transparent;`; avatarEl.textContent=''; }
-    else { avatarEl.textContent=name[0].toUpperCase(); }
+    if(photo){
+      const img=new Image();
+      img.onload=()=>{ avatarEl.style.backgroundImage=`url(${photo})`; avatarEl.style.backgroundSize='cover'; avatarEl.style.backgroundColor='transparent'; avatarEl.textContent=''; };
+      img.onerror=()=>{ avatarEl.style.backgroundImage=''; avatarEl.textContent=name[0].toUpperCase(); };
+      img.src=photo;
+    } else {
+      avatarEl.style.backgroundImage='';
+      avatarEl.textContent=name[0].toUpperCase();
+    }
   }
   document.getElementById('dateBadge').textContent=new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
   document.getElementById('wDate').value=TODAY_DATE;
@@ -1063,47 +1071,35 @@ function renderBars(tot,tgt){
 //  CALENDAR
 // ════════════════════════════════════════════════════
 
-// Build a macro-split pie chart for a calendar date cell.
-// Slice proportions = share of total calories eaten that day (C/F/P).
+// Three concentric progress rings: outer=carbs, mid=fat, inner=protein.
+// Arc length = % of daily target met (capped at 100%). Date stays centered.
+const calSvgCache = new Map();
 function calRingHtml(ds){
+  if(calSvgCache.has(ds)) return calSvgCache.get(ds);
   const tot = mealCache[ds] ? calcTotals(mealCache[ds]) : dayTotals[ds];
-  if(!tot) return '';
-  const cCals=(tot.carb||0)*4, fCals=(tot.fat||0)*9, pCals=(tot.protein||0)*4;
-  const total=cCals+fCals+pCals;
-  if(!total) return '';
-
-  const cx=18,cy=18,r=13;
-  const slices=[
-    {pct:cCals/total, fill:'rgba(245,166,35,0.82)'},   // carbs  — amber
-    {pct:fCals/total, fill:'rgba(224,92,92,0.82)'},    // fat    — coral
-    {pct:pCals/total, fill:'rgba(78,205,196,0.82)'},   // protein— teal
-  ].filter(s=>s.pct>0.005);
-
-  let angle=-Math.PI/2; // start at 12 o'clock
-  const paths=slices.map(s=>{
-    const a0=angle, a1=angle+s.pct*2*Math.PI;
-    angle=a1;
-    if(s.pct>=0.999) return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${s.fill}"/>`;
-    const x0=+(cx+r*Math.cos(a0)).toFixed(2), y0=+(cy+r*Math.sin(a0)).toFixed(2);
-    const x1=+(cx+r*Math.cos(a1)).toFixed(2), y1=+(cy+r*Math.sin(a1)).toFixed(2);
-    return `<path d="M${cx},${cy}L${x0},${y0}A${r},${r} 0 ${s.pct>0.5?1:0},1 ${x1},${y1}Z" fill="${s.fill}"/>`;
-  }).join('');
-
-  // Thin separator lines between slices for clarity
-  angle=-Math.PI/2;
-  const lines=slices.map(s=>{
-    const lx=+(cx+r*Math.cos(angle)).toFixed(2), ly=+(cy+r*Math.sin(angle)).toFixed(2);
-    angle+=s.pct*2*Math.PI;
-    return slices.length>1?`<line x1="${cx}" y1="${cy}" x2="${lx}" y2="${ly}" stroke="var(--card)" stroke-width="0.8"/>`:'';
-  }).join('');
-
-  return `<svg class="cal-ring" viewBox="0 0 36 36">
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--surface)"/>
-    ${paths}${lines}
-  </svg>`;
+  if(!tot){ calSvgCache.set(ds,''); return ''; }
+  const dayName = dateToDay(ds);
+  const tgt = targets[dayName]||{carb:0,fat:0,protein:0};
+  function ring(r, actual, target, baseColor, metColor){
+    const pct = target>0 ? Math.min(actual/target, 1) : (actual>0 ? 1 : 0);
+    if(pct<=0) return `<circle cx="18" cy="18" r="${r}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2.2"/>`;
+    const c=+(2*Math.PI*r).toFixed(3), len=+(pct*c).toFixed(3);
+    const color = pct>=1 ? metColor : baseColor;
+    return `<circle cx="18" cy="18" r="${r}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2.2"/>
+<circle cx="18" cy="18" r="${r}" fill="none" stroke="${color}" stroke-width="2.2" stroke-dasharray="${len} ${c}" stroke-linecap="round" transform="rotate(-90 18 18)"/>`;
+  }
+  const svg=`<svg class="cal-ring" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+${ring(15,tot.carb||0,tgt.carb,'rgba(245,166,35,0.75)','rgba(245,166,35,1)')}
+${ring(11,tot.fat||0,tgt.fat,'rgba(224,92,92,0.75)','rgba(224,92,92,1)')}
+${ring(7,tot.protein||0,tgt.protein,'rgba(78,205,196,0.75)','rgba(78,205,196,1)')}
+</svg>`;
+  calSvgCache.set(ds, svg);
+  return svg;
 }
 
 function renderCalendar(){
+  const wrap = document.getElementById('calendarWrap');
+  if(!wrap || wrap.style.display==='none') return;
   const now = new Date();
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   document.getElementById('calMonthLabel').textContent = `${monthNames[calMonth]} ${calYear}`;
@@ -1152,7 +1148,7 @@ async function calNav(dir){
   calMonth += dir;
   if(calMonth > 11){ calMonth=0; calYear++; }
   if(calMonth < 0) { calMonth=11; calYear--; }
-  // load meal dots for new month
+  calSvgCache.clear();
   await loadMealsForMonth(calYear, calMonth);
   renderCalendar();
 }
@@ -1177,6 +1173,7 @@ function toggleCalendar(){
   const open=wrap.style.display!=='none';
   wrap.style.display=open?'none':'block';
   btn.textContent=open?'📅 History':'✕ Close';
+  if(!open) renderCalendar();
 }
 
 function goBackToToday(){
@@ -1245,6 +1242,7 @@ async function addMeal(){
   const tempId='tmp_'+Date.now();
   mealCache[activeDate].push({id:tempId,...meal});
   datesWithMeals.add(activeDate);
+  calSvgCache.delete(activeDate);
   renderAll();
   renderCalendar();
   ['mealName','mCarb','mFat','mProtein'].forEach(id=>document.getElementById(id).value='');
@@ -1260,6 +1258,7 @@ async function deleteMeal(id){
   if(mealCache[activeDate]) mealCache[activeDate]=mealCache[activeDate].filter(m=>m.id!==id);
   // remove dot if no meals left for this date
   if(mealCache[activeDate]&&mealCache[activeDate].length===0) datesWithMeals.delete(activeDate);
+  calSvgCache.delete(activeDate);
   renderAll();
   renderCalendar();
   try { await sub('meals').doc(id).delete(); } catch(e){ console.error('deleteMeal:',e); }
